@@ -1,55 +1,82 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { hasSupabase, supabase } from '../lib/supabase'
+import { Link, useNavigate } from 'react-router-dom'
+import { deveMostrarDicaLogin, esconderDicaLogin, obterLoginLembrado, salvarSessao } from '../lib/auth'
+import { autenticarUsuarioApi } from '../lib/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState(obterLoginLembrado())
   const [senha, setSenha] = useState('')
+  const [lembrar, setLembrar] = useState(true)
   const [erro, setErro] = useState('')
-  const [carregando, setCarregando] = useState(false)
+  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [mostrarDica, setMostrarDica] = useState(deveMostrarDicaLogin())
 
   async function entrar(e) {
     e.preventDefault()
     setErro('')
-
-    if (!hasSupabase) {
-      localStorage.setItem('usuario_mock', JSON.stringify({ email, tipo: email.includes('admin') ? 'admin' : 'operador' }))
-      navigate('/pdv')
+    const resposta = await autenticarUsuarioApi(login.trim(), senha)
+    if (!resposta.ok) {
+      setErro(resposta.erro)
       return
     }
-
-    setCarregando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    setCarregando(false)
-
-    if (error) {
-      setErro(error.message)
-      return
-    }
-
-    navigate('/pdv')
+    salvarSessao(resposta.usuario, lembrar)
+    esconderDicaLogin()
+    navigate('/pdv', { replace: true })
   }
 
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={entrar}>
         <div className="brand-center">
-          <div className="logo-badge big">SB</div>
+          <img src="/logo-speedburger.png" alt="Logo Speed Burger" className="login-logo" />
           <h1>Speed PDV</h1>
-          <p>PDV para complementar o Goomer com foco em caixa, retirada e fechamento.</p>
+          <p>
+            Sistema de caixa para registrar entradas, saídas, pagamentos de mesas,
+            balcão, retiradas e entregas no local.
+          </p>
         </div>
+
+        {mostrarDica && (
+          <div className="info-box">
+            <strong>Primeiro acesso</strong>
+            <span>Use o administrador padrão apenas no primeiro login.</span>
+            <span>Depois altere a senha na área Admin.</span>
+            <button type="button" className="ghost-btn compact-btn" onClick={() => { setMostrarDica(false); esconderDicaLogin() }}>
+              Ocultar dica
+            </button>
+          </div>
+        )}
+
+        <div className="panel compact-panel stack gap-sm" style={{ marginBottom: 10 }}>
+          <strong>🛵 Portal do motoca</strong>
+          <small className="muted">Acesso rápido para o motoca cadastrar, entrar e enviar a prestação de contas do dia.</small>
+          <Link to="/portal-motoca" className="primary-btn compact-btn" style={{ display: 'inline-flex', justifyContent: 'center' }}>Abrir portal do motoca</Link>
+        </div>
+
         <label>
-          E-mail
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          Usuário
+          <input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="Ex.: admin ou joao" required />
         </label>
+
         <label>
           Senha
-          <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required={!(!hasSupabase)} />
+          <div className="password-field">
+            <input type={mostrarSenha ? 'text' : 'password'} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Digite a senha" required />
+            <button type="button" className="ghost-btn compact-btn" onClick={() => setMostrarSenha((v) => !v)}>
+              {mostrarSenha ? 'Ocultar' : 'Mostrar'}
+            </button>
+          </div>
         </label>
+
+        <label className="check-row">
+          <input type="checkbox" checked={lembrar} onChange={(e) => setLembrar(e.target.checked)} />
+          <span>Lembrar apenas o usuário neste navegador</span>
+        </label>
+
         {erro && <div className="alert error">{erro}</div>}
-        {!hasSupabase && <div className="alert">Modo demonstração ativo. Configure o .env para usar o Supabase real.</div>}
-        <button className="primary-btn" disabled={carregando}>{carregando ? 'Entrando...' : 'Entrar'}</button>
+
+        <button className="primary-btn btn-lg">Entrar</button>
       </form>
     </div>
   )
